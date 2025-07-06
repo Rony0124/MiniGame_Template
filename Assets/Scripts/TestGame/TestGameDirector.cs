@@ -1,3 +1,5 @@
+using UnityEngine;
+
 public class TestGameDirector : MiniGameDirectorBase
 {
     protected override void OnMiniGameStateChanged(MiniGameState newValue)
@@ -13,5 +15,14 @@ public class TestGameDirector : MiniGameDirectorBase
                 
                 break;
         }
+    }
+    
+    public void OnTimeOver()
+    {
+        Debug.Log("Director Timer over");
+        
+        var testPlayer = playerController as TestPlayerController;
+        if(testPlayer)
+            testPlayer.OnTimeOver();
     }
 }

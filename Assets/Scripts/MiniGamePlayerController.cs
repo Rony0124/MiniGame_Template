@@ -1,8 +1,23 @@
 using System;
+using System.Collections;
 using UnityEngine;
 
 public abstract class MiniGamePlayerController : MonoBehaviour
 {
+    protected MiniGameDirectorBase miniGameDirector;
+    
+    private void Start()
+    {
+        StartCoroutine(InitOnStart());
+    }
+
+    protected virtual IEnumerator InitOnStart()
+    {
+        yield return new WaitUntil(() => GameContext.Singleton != null && GameContext.Singleton.LocalDirector != null);
+        
+        miniGameDirector = GameContext.Singleton.LocalDirector;
+    }
+    
     public virtual void OnMiniGameStateChanged(MiniGameDirectorBase.MiniGameState newValue)
     {
         switch (newValue)

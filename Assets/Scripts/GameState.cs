@@ -58,16 +58,7 @@ public class GameState : MonoBehaviour
     public GameRecord LastMiniGameRecord { get; private set; }
 
     private int currentMiniGameDifficulty;
-    public int CurrentMiniGameDifficulty
-    {
-        get
-        {
-            if (hasMiniGameDifficultyTestValue)
-                return miniGameDifficultyForTest;
-
-            return currentMiniGameDifficulty;
-        }
-    }
+    public int CurrentMiniGameDifficulty => currentMiniGameDifficulty;
 
     public bool IsPracticeMode { get; private set; }
 
@@ -82,6 +73,17 @@ public class GameState : MonoBehaviour
         Singleton = this;
             
         DontDestroyOnLoad(this);
+    }
+
+    public void StartNewGame()
+    {
+        LastMiniGameRecord = default;
+        
+        //difficulty setting
+        if (hasMiniGameDifficultyTestValue)
+        {
+            currentMiniGameDifficulty = miniGameDifficultyForTest;
+        }
     }
     
     public bool IsLastMiniGameSuccess()
