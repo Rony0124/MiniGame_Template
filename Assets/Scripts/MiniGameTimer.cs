@@ -72,4 +72,9 @@ public class MiniGameTimer : MonoBehaviour
     {
         return firstGoalTimeSecond - GetTimeSpan();
     }
+    
+    public void SetTimerToFirstCutOff(float value)
+    {
+        firstGoalTimeSecond = value;
+    }
 }

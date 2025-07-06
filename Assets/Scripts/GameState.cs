@@ -1,6 +1,4 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class GameState : MonoBehaviour
@@ -24,14 +22,20 @@ public class GameState : MonoBehaviour
     public struct GameRecord
     {
         public int Score;
+        public bool Counting;
         public bool Passed;
-        
+        public bool Final;
+        public bool PassedInGame;
+        public float StartTime;
+        public int ScoreRank;
+        public bool AscendingOrder;
+
         public bool Pass
         {
             get => Passed;
             set => Passed = value;
         }
-        
+
         public int NumberRecord
         {
             get => Score;
@@ -41,12 +45,36 @@ public class GameState : MonoBehaviour
         public float TimeSpanRecord
         {
             get => Score * 0.001f;
-            set => Score = Mathf.RoundToInt(value*1000.0f);
+            set => Score = Mathf.RoundToInt(value * 1000.0f);
+        }
+
+        public bool Count
+        {
+            get => Counting;
+            set => Counting = value;
         }
     }
 
     public GameRecord LastMiniGameRecord { get; private set; }
+
+    private int currentMiniGameDifficulty;
+    public int CurrentMiniGameDifficulty
+    {
+        get
+        {
+            if (hasMiniGameDifficultyTestValue)
+                return miniGameDifficultyForTest;
+
+            return currentMiniGameDifficulty;
+        }
+    }
+
     public bool IsPracticeMode { get; private set; }
+
+    [SerializeField] 
+    private bool hasMiniGameDifficultyTestValue;
+    [SerializeField] 
+    private int miniGameDifficultyForTest;
 
     private void Awake()
     {

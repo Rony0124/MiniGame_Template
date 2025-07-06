@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public abstract class MiniGameDirectorBase : MonoBehaviour
@@ -16,10 +15,14 @@ public abstract class MiniGameDirectorBase : MonoBehaviour
         OutroFailed,
         OutroReset,
         Exit,               // 화면 끄는 연출하고 스테이지로 돌아간다.
-    };
-
-
-    private MiniGamePlayerController playerController;
+    }
+    
+    [SerializeField] 
+    protected MiniGamePlayerController playerController;
+    
+    [Header("MiniGame Info")]
+    public MiniGameInfo miniGameInfo;
+    
     private MiniGameTimer miniGameTimer;
     private bool realGame;
     private MiniGameState currentMiniGameSate;
@@ -47,19 +50,14 @@ public abstract class MiniGameDirectorBase : MonoBehaviour
     protected virtual void Start()
     {
         //타이머
+        miniGameTimer = MiniGameFramework.Singleton.MiniGameTimer;
         
-        //info 설정
-        
-        //페이드
-     
-        //stage info 설정
-        
-        //playercontroller
+        //페이드 설정
     }
     
     private void StartGame()
     {
-        ChangeMiniGameState(MiniGameState.Playing);
+        OnMiniGameStateChanged(MiniGameState.Playing);
     }
     
     public void ResetGame(bool realGame)
@@ -68,16 +66,16 @@ public abstract class MiniGameDirectorBase : MonoBehaviour
         
         RealGame = realGame;
         
-        ChangeMiniGameState(realGame ? MiniGameState.Intro : MiniGameState.PrePlaying);
+        OnMiniGameStateChanged(realGame ? MiniGameState.Intro : MiniGameState.PrePlaying);
     }
     
     public virtual void FinishGame()
     {
         playerController.FinishGame(true);
-        ChangeMiniGameState(MiniGameState.PostPlaying);
+        OnMiniGameStateChanged(MiniGameState.PostPlaying);
     }
     
-    private void ChangeMiniGameState(MiniGameState newMiniGameState)
+    protected virtual void OnMiniGameStateChanged(MiniGameState newMiniGameState)
     {
         Debug.Log($"현재 MiniGameState:{newMiniGameState} / RealGame:{RealGame}");
         switch (newMiniGameState)
@@ -109,8 +107,11 @@ public abstract class MiniGameDirectorBase : MonoBehaviour
                 StartCoroutine(StartOutroResetCoroutine());
                 break;
             case MiniGameState.Exit:
+                StartCoroutine(StartExitCoroutine());
                 break;
         }
+
+        playerController.OnMiniGameStateChanged(newMiniGameState);
 
         currentMiniGameSate = newMiniGameState;
     }
@@ -118,8 +119,11 @@ public abstract class MiniGameDirectorBase : MonoBehaviour
     protected virtual IEnumerator StartIntroCoroutine()
     {
         //intro가 있다면 여기서 플레이
+        if(miniGameInfo.completeWithinTimeLimit)
+            MiniGameFramework.Singleton.SetTimer(miniGameInfo);
+        
         yield return null;
-        ChangeMiniGameState(MiniGameState.PrePlaying);
+        OnMiniGameStateChanged(MiniGameState.PrePlaying);
     }
     
     private IEnumerator StartPrePlayingCoroutine()
@@ -136,13 +140,13 @@ public abstract class MiniGameDirectorBase : MonoBehaviour
             
         if (RealGame)
         {
-            ChangeMiniGameState(IsMiniGameResultsSuccess()
+            OnMiniGameStateChanged(IsMiniGameResultsSuccess()
                 ? MiniGameState.OutroSuccess
                 : MiniGameState.OutroFailed);
         }
         else
         {
-            ChangeMiniGameState(MiniGameState.OutroReset);
+            OnMiniGameStateChanged(MiniGameState.OutroReset);
         }
     }
     
@@ -171,7 +175,7 @@ public abstract class MiniGameDirectorBase : MonoBehaviour
             Debug.Log("실게임 이후");
         }
         
-        ChangeMiniGameState(MiniGameState.Exit);
+        OnMiniGameStateChanged(MiniGameState.Exit);
     }
     
     private IEnumerator StartOutroResetCoroutine()
@@ -195,7 +199,6 @@ public abstract class MiniGameDirectorBase : MonoBehaviour
             Debug.Log("해당 미니게임은 종료");
         }
     }
-
     
     private void OnRealGameValueChanged(bool isRealGame)
     {
@@ -206,9 +209,8 @@ public abstract class MiniGameDirectorBase : MonoBehaviour
     {
         //게임 결과 실패, 성공 판단
         return GameState.Singleton.IsLastMiniGameSuccess();
-    }
-    
-    public virtual void SetGameRecord(GameState.GameRecord gameRecord)
+    } 
+    public virtual void SetGameRecord(GameState.GameRecord gameRecord) 
     {
         if (gameEnded)
             return;
@@ -218,12 +220,104 @@ public abstract class MiniGameDirectorBase : MonoBehaviour
 
         GameState.Singleton.SetCurrentMiniGameRecord(gameRecord);
                 
-        ChangeMiniGameState(MiniGameState.PostPlaying);
+        OnMiniGameStateChanged(MiniGameState.PostPlaying);
 
         if (RealGame)
         {
             gameEnded = true;
         }
+    }
+    
+    public virtual void SetNumberRecord(int number)
+    { 
+        var currentRecord = GameState.Singleton.LastMiniGameRecord;
+        currentRecord.Pass = false; 
+        currentRecord.PassedInGame = true;
+        currentRecord.ScoreRank = 0;
+        currentRecord.NumberRecord = number;
+        
+        SetGameRecord(currentRecord);
+    }
+      
+    public virtual void EndNumberRecord()
+    {
+        var currentRecord = GameState.Singleton.LastMiniGameRecord;
+        currentRecord.Final = true;
+        currentRecord.PassedInGame = true;
+        
+        if (currentRecord.ScoreRank == 0)
+            currentRecord.PassedInGame = false;
+
+        SetGameRecord(currentRecord);
+    }
+    
+    public virtual void StartTimeRecordServerRpc(float startTime)
+    {
+        GameState.GameRecord gameRecord = default; 
+        gameRecord.StartTime = startTime;
+        gameRecord.Pass = false;
+        gameRecord.PassedInGame = true;
+        gameRecord.ScoreRank = 0;
+        gameRecord.AscendingOrder = (miniGameInfo.resultRecordOrder == MiniGameInfo.ResultRecordOrder.LesserTimeSpan);
+        
+        SetGameRecord(gameRecord);
+    }
+    
+    public virtual void EndTimeRecord(float endTime, bool timeOut)
+    {
+        var currentRecord = GameState.Singleton.LastMiniGameRecord;
+        currentRecord.TimeSpanRecord = timeOut ? miniGameTimer.firstGoalTimeSecond : endTime - currentRecord.StartTime;
+        currentRecord.ScoreRank = GetScoreRank(currentRecord.TimeSpanRecord, currentRecord.AscendingOrder);
+        if (currentRecord.ScoreRank == 0)
+            currentRecord.PassedInGame = false;
+        
+        currentRecord.Final = true;
+            
+        SetGameRecord(currentRecord);
+    }
+    
+    private int GetScoreRank(float score, bool ascendingOrder)
+    {
+        var currentDifficulty = GameState.Singleton.CurrentMiniGameDifficulty;
+        var cutoffs = new float[3];
+        cutoffs[0] = miniGameInfo.gameCutOffs[0].Evaluate(currentDifficulty);
+        cutoffs[1] = miniGameInfo.gameCutOffs[1].Evaluate(currentDifficulty);
+        cutoffs[2] = miniGameInfo.gameCutOffs[2].Evaluate(currentDifficulty);
+        
+        if (!ascendingOrder)
+        {
+            if (score < cutoffs[0])
+                return 0;
+            if (score >= cutoffs[0] && score < cutoffs[1])
+                return 1;
+            if (score >= cutoffs[1] && score < cutoffs[2])
+                return 2;
+                    
+            return 3;
+        }
+        
+        if (miniGameInfo.completeWithinTimeLimit)
+        {
+            cutoffs[0] = miniGameTimer.firstGoalTimeSecond;
+            
+            if (score >= cutoffs[0])
+                return 0;
+            if (score < cutoffs[0] && score > cutoffs[1])
+                return 1;
+            if (score <= cutoffs[1] && score > cutoffs[2])
+                return 2;
+                    
+            return 3;
+        }
+                
+        if (score > cutoffs[0])
+            return 0;
+        if (score <= cutoffs[0] && score > cutoffs[1])
+            return 1;
+        if (score <= cutoffs[1] && score > cutoffs[2])
+            return 2;
+                    
+        return 3;
     }
     
     public bool CheckPlayerReady()
